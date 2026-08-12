@@ -1,0 +1,11 @@
+# macOS
+.DS_Store
+
+# 历史连接记录 (运行时生成在用户主目录，保险起见也排除)
+.scrcpy_hosts
+
+# 编辑器
+*.swp
+*~
+.idea/
+.vscode/
