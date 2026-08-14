@@ -102,10 +102,28 @@ scan() {
 # WiFi 连接; 成功时设置 WIFI_TARGET
 wifi_connect() {
     local target="$1"
+
+    # adb connect 会把未指定端口的 IPv4 地址自动补成 :5555。
+    # 后续检查必须使用同一个完整地址，否则会出现
+    # "connected to 192.168.x.x:5555" 后又被判定失败。
+    if [[ "$target" == *.* && "$target" != *:* ]]; then
+        target="${target}:5555"
+    fi
+
     echo -e "  ${CYN}连接中 ${target} …${RST}"
     adb connect "$target" 2>&1 | sed 's/^/    /'
-    sleep 1
-    if adb devices 2>/dev/null | awk -v t="$target" '$1==t && $2=="device"' | grep -q .; then
+
+    # 首次连接后 adbd 可能需要数秒才从 offline 变为 device。
+    local ready=0 attempt
+    for ((attempt = 1; attempt <= 10; attempt++)); do
+        if adb devices 2>/dev/null | awk -v t="$target" '$1==t && $2=="device" { found=1 } END { exit !found }'; then
+            ready=1
+            break
+        fi
+        sleep 0.5
+    done
+
+    if [ "$ready" -eq 1 ]; then
         echo -e "  ${GRN}✓ WiFi 连接成功${RST}"
         save_history "${target%%:*}"
         echo -e "  ${DIM}(已记住此 IP，下次可直接选择)${RST}"
