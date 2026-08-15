@@ -1,31 +1,23 @@
 @echo off
 chcp 65001 >nul
 setlocal enabledelayedexpansion
-title scrcpy 一键投屏 · Windows
+title scrcpy One-Key Mirroring - Windows
 
-REM ┌────────────────────────────────────────────────┐
-REM │  scrcpy 一键投屏 — Windows 版  v1.1.0          │
-REM │  与 macOS「一键启动投屏.command」功能对齐        │
-REM ├────────────────────────────────────────────────┤
-REM │  • 自动检测已连接的 USB / WiFi 设备             │
-REM │  • 记住历史 WiFi IP, 下次直接选                 │
-REM │  • 输入数字 = 选序号; 输入 IP 地址 = 直接连      │
-REM │  • 自动查找 adb / scrcpy, 无需硬编码路径         │
-REM └────────────────────────────────────────────────┘
+REM scrcpy one-key launcher for Windows v1.1.0
+REM Detect USB/WiFi devices and remember WiFi addresses.
+REM Locate adb.exe and scrcpy.exe automatically.
 
-REM ─── 可调参数 ─────────────────────────────────
+REM Configurable parameters
 set MAX_SIZE=1280
 set VIDEO_BIT_RATE=4M
 set MAX_FPS=30
 set MAX_HISTORY=10
 
-REM ─── 内部路径 (历史文件与 macOS 版同名同格式) ──
-set "HISTORY_FILE=%USERPROFILE%\.scrcpy_hosts"
+REM Internal paths
+set "HISTORY_FILE=%~dp0.scrcpy_hosts"
 set "TMPF=%TEMP%\scrcpy_onekey.tmp"
 
-REM ═════════════════════════════════════════════
-REM  查找工具
-REM ═════════════════════════════════════════════
+REM Find required tools
 set "SCRCPY="
 set "SCRCPY_DIR="
 set "ADB="
@@ -35,34 +27,32 @@ if defined SCRCPY for %%i in ("!SCRCPY!") do set "SCRCPY_DIR=%%~dpi"
 call :find_tool ADB adb.exe
 
 if not defined SCRCPY (
-    echo   [错误] 未找到 scrcpy.exe
-    echo   安装方式任选其一:
+    echo   [ERROR] scrcpy.exe was not found.
+    echo   Install it using either method:
     echo     1. winget install Genymobile.scrcpy
-    echo     2. 到 https://github.com/Genymobile/scrcpy 下载 win64 压缩包
-    echo        解压到 C:\scrcpy 或本脚本同目录, 均可被自动找到
+    echo     2. Download the win64 archive from https://github.com/Genymobile/scrcpy
+    echo        Extract it to C:\scrcpy or beside this script.
     goto :fail
 )
 if not defined ADB (
-    echo   [错误] 未找到 adb.exe
-    echo   scrcpy win64 压缩包自带 adb.exe, 保持解压目录完整即可
+    echo   [ERROR] adb.exe was not found.
+    echo   Keep adb.exe from the scrcpy win64 archive beside scrcpy.exe.
     goto :fail
 )
 
 echo.
 echo   ==========================================
-echo        scrcpy 一键投屏  ·  Windows
-echo        WiFi 无线 / USB 有线
+echo        scrcpy One-Key Mirroring - Windows
+echo        WiFi wireless / USB wired
 echo   ==========================================
 echo.
 
-REM ═════════════════════════════════════════════
-REM  [1/2] 扫描设备: 已连接的 USB+WiFi, 再补历史 IP
-REM ═════════════════════════════════════════════
+REM Scan connected USB/WiFi devices, then append saved IPs
 set /a COUNT=0
 set "UNAUTH="
 "%ADB%" start-server >nul 2>&1
 
-REM cmd 的 for/f 解析带引号命令易踩坑, 统一经临时文件解析
+REM Parse adb output through a temporary file.
 "%ADB%" devices > "%TMPF%" 2>nul
 for /f "usebackq skip=1 tokens=1,2" %%a in ("%TMPF%") do (
     if "%%b"=="device" (
@@ -89,47 +79,45 @@ if exist "%HISTORY_FILE%" for /f "usebackq delims=" %%i in ("%HISTORY_FILE%") do
     )
 )
 
-echo   [步骤 1/2] 选择设备
+echo   [Step 1/2] Select a device
 echo.
 if !COUNT! equ 0 (
-    echo   （暂无已连接设备, 也无历史记录）
-    echo   直接输入 IP 地址即可连接, 例如 192.168.1.100
+    echo   No connected device or saved address was found.
+    echo   Enter an IP address directly, for example 192.168.1.100
 ) else (
     for /l %%i in (1,1,!COUNT!) do (
         if "!M_TYPE_%%i!"=="usb"       echo     %%i. [USB ] !M_DEV_%%i!
-        if "!M_TYPE_%%i!"=="wifi-on"   echo     %%i. [WiFi] !M_DEV_%%i! （已连接）
-        if "!M_TYPE_%%i!"=="wifi-hist" echo     %%i. [WiFi] !M_DEV_%%i! （历史）
+        if "!M_TYPE_%%i!"=="wifi-on"   echo     %%i. [WiFi] !M_DEV_%%i! [connected]
+        if "!M_TYPE_%%i!"=="wifi-hist" echo     %%i. [WiFi] !M_DEV_%%i! [saved]
     )
 )
-if defined UNAUTH echo   （提示: !UNAUTH! 未授权 ADB 调试, 请在手机上允许）
+if defined UNAUTH echo   Note: authorize ADB debugging for !UNAUTH! on the phone.
 echo.
 
 set "INPUT="
-set /p "INPUT=  请输入序号或 IP 地址 （回车取消）: "
+set /p "INPUT=  Enter a number or IP address [Enter to cancel]: "
 if not defined INPUT goto :cancel
 set "INPUT=!INPUT: =!"
 if not defined INPUT goto :cancel
 
-REM ─── 去前导零 (cmd 把 08 当八进制, 会比较出错) ───
+REM Strip leading zeroes because cmd treats 08 as octal.
 :strip_zero
 if "!INPUT:~0,1!"=="0" if not "!INPUT!"=="0" (
     set "INPUT=!INPUT:~1!"
     goto :strip_zero
 )
 
-REM ─── 字符门: 只允许 数字 . : , 防特殊字符注入后续命令 ───
-set "CHK=!INPUT!"
-for %%c in (0 1 2 3 4 5 6 7 8 9) do set "CHK=!CHK:%%c=!"
-set "CHK=!CHK:.=!"
-set "CHK=!CHK::=!"
-if not "!CHK!"=="" (
+REM Allow only digits, dots, and colons.
+set "CHK="
+for /f "delims=0123456789.:" %%c in ("!INPUT!") do set "CHK=%%c"
+if defined CHK (
     echo.
-    echo   [错误] 无法识别: '!INPUT!'
-    echo   请输入序号 （1, 2 ...） 或 IP 地址 （192.168.x.x）
+    echo   [ERROR] Invalid input: '!INPUT!'
+    echo   Enter a number [1, 2, ...] or an IP address [192.168.x.x].
     goto :fail
 )
 
-REM ─── 解析输入: 含 . 或 : → IP; 否则必为纯数字 → 序号 ───
+REM A dot/colon means an address; digits only means a menu index.
 set "TARGET="
 set "ACTION="
 if not "!INPUT:.=!"=="!INPUT!" set "ACTION=wifi-new"
@@ -143,8 +131,8 @@ if defined ACTION (
     if !INPUT! gtr !COUNT! set "IDX_OK=0"
     if "!IDX_OK!"=="0" (
         echo.
-        echo   [错误] 序号超出范围: !INPUT!
-        if !COUNT! gtr 0 echo   （有效范围 1 - !COUNT!）
+        echo   [ERROR] Device number is out of range: !INPUT!
+        if !COUNT! gtr 0 echo   Valid range: 1 - !COUNT!
         goto :fail
     )
     for %%k in (!INPUT!) do (
@@ -153,54 +141,47 @@ if defined ACTION (
     )
     if not defined TARGET (
         echo.
-        echo   [错误] 序号超出范围: !INPUT!
+        echo   [ERROR] Device number is out of range: !INPUT!
         goto :fail
     )
 )
 
-REM ═════════════════════════════════════════════
-REM  建立连接
-REM ═════════════════════════════════════════════
+REM Establish the selected connection
 echo.
 if "!ACTION!"=="usb" (
-    echo   [USB] 设备就绪: !TARGET!
+    echo   [USB] Device ready: !TARGET!
 ) else if "!ACTION!"=="wifi-on" (
-    echo   设备已连接: !TARGET!
+    echo   Device already connected: !TARGET!
     for /f "delims=:" %%i in ("!TARGET!") do call :save_history "%%i"
-    echo   （已记住此 IP, 下次可直接选择）
+    echo   IP saved for next time.
 ) else (
     call :wifi_connect "!TARGET!"
     if errorlevel 1 (
         echo.
-        echo   [错误] WiFi 连接失败
-        echo   请确认:
-        echo     · 手机与电脑在同一 WiFi 局域网
-        echo     · 手机已开启无线调试 （端口 5555）
+        echo   [ERROR] WiFi connection failed.
+        echo   Check that the phone and PC are on the same WiFi network.
+        echo   Check that wireless debugging is enabled on port 5555.
         goto :fail
     )
     set "TARGET=!WIFI_TARGET!"
 )
 
-REM ═════════════════════════════════════════════
-REM  [2/2] 启动 scrcpy
-REM ═════════════════════════════════════════════
+REM Launch scrcpy
 echo.
-echo   [步骤 2/2] 启动 scrcpy 投屏
-echo   设备 !TARGET! · 分辨率 %MAX_SIZE% · 码率 %VIDEO_BIT_RATE% · 帧率 %MAX_FPS%
-echo   （关闭窗口或按 Ctrl+C 可断开投屏）
+echo   [Step 2/2] Launch scrcpy
+echo   Device !TARGET! - Size %MAX_SIZE% - Bitrate %VIDEO_BIT_RATE% - FPS %MAX_FPS%
+echo   Close the window or press Ctrl+C to disconnect.
 echo.
 "%SCRCPY%" -s !TARGET! --max-size %MAX_SIZE% --video-bit-rate %VIDEO_BIT_RATE% --max-fps %MAX_FPS% --stay-awake --turn-screen-off
-if errorlevel 1 echo   [提示] scrcpy 异常退出, 代码 !errorlevel!
+if errorlevel 1 echo   [NOTICE] scrcpy exited with code !errorlevel!.
 goto :end
 
-REM ═════════════════════════════════════════════
-REM  子程序
-REM ═════════════════════════════════════════════
+REM Subroutines
 
 :find_tool
-REM 用法: call :find_tool 输出变量名 文件名  →  找到则写完整路径, 否则留空
+REM Usage: call :find_tool OUTPUT_VARIABLE FILE_NAME
 set "FT="
-REM 优先 scrcpy 自带目录 (保证 adb 版本与 scrcpy 匹配)
+REM Prefer adb shipped beside scrcpy.
 if defined SCRCPY_DIR if exist "%SCRCPY_DIR%\%~2" set "FT=%SCRCPY_DIR%\%~2"
 if not defined FT (
     where "%~2" >nul 2>&1
@@ -218,13 +199,13 @@ exit /b 0
 
 :wifi_connect
 set "WC=%~1"
-REM 5555 是 adb connect 的默认端口, 统一只传纯 IP (与 macOS 版一致)
+REM Port 5555 is the default for adb connect.
 if "!WC:~-5!"==":5555" set "WC=!WC:~0,-5!"
 echo.
-echo   连接中 !WC! ...
+echo   Connecting to !WC! ...
 "%ADB%" connect !WC! > "%TMPF%" 2>&1
 for /f "usebackq delims=" %%o in ("%TMPF%") do echo     %%o
-REM 首次连接后 adbd 可能要等几秒才从 offline 变为 device, 轮询等待
+REM Wait for adbd to transition from offline to device.
 set "WIFI_TARGET="
 set /a TRIES=0
 :wc_poll
@@ -241,15 +222,15 @@ if !TRIES! geq 10 goto :wc_fail
 ping -n 2 127.0.0.1 >nul
 goto :wc_poll
 :wc_ok
-echo   [WiFi] 连接成功
+echo   [WiFi] Connected successfully.
 call :save_history "!WC!"
-echo   （已记住此 IP, 下次可直接选择）
+echo   IP saved for next time.
 exit /b 0
 :wc_fail
 exit /b 1
 
 :save_history
-REM 新 IP 置顶写入, 去重, 最多保留 MAX_HISTORY 条
+REM Save newest IP first, deduplicate, and limit history size.
 set "NEWIP=%~1"
 if not defined NEWIP exit /b 0
 set "TMPH=%HISTORY_FILE%.tmp"
@@ -268,7 +249,7 @@ exit /b 0
 
 :cancel
 echo.
-echo   已取消
+echo   Cancelled.
 goto :end
 
 :fail
@@ -278,5 +259,4 @@ exit /b 1
 
 :end
 echo.
-pause
 exit /b 0
