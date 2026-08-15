@@ -22,11 +22,11 @@ su -c 'echo 1 > /sys/class/graphics/fb0/msm_disable_panel'
 ```
 MI6_HEADLESS_HEADSET/
 ├── README.md              ← 本说明文件
-├── 一键启动投屏.bat        ← Windows: 双击运行
-└── 一键启动投屏.command    ← macOS: 双击运行（支持 IP 记忆）
+├── 一键启动投屏.bat        ← Windows: 双击运行（增强版）
+└── 一键启动投屏.command    ← macOS: 双击运行（增强版）
 ```
 
-## 一键启动投屏 说明
+## 一键启动投屏 说明（Windows / macOS 功能一致）
 
 脚本自动完成两步：
 
@@ -35,25 +35,23 @@ MI6_HEADLESS_HEADSET/
 
 > 面板禁用由手机端 Magisk 脚本开机自动完成，投屏脚本不再处理。
 
-### Windows (.bat)
-
- - WiFi 优先 (`<设备IP>:5555`)，不通时回退 USB (`<设备序列号>`)
-
-### macOS (.command) — 增强版
-
 | 功能 | 说明 |
 |------|------|
 | 自动检测 USB | 无需手填设备序列号 |
-| IP 记忆 | 连接成功的 WiFi IP 存入 `~/.scrcpy_hosts`，下次直接选 |
+| IP 记忆 | 连接成功的 WiFi IP 存入历史文件（macOS: `~/.scrcpy_hosts`，Windows: `%USERPROFILE%\.scrcpy_hosts`），下次直接选 |
 | 灵活输入 | 输入 **数字** 选序号，输入 **IP 地址** 直接连 |
+| 自动找工具 | Windows 版自动查找 `scrcpy.exe` / `adb.exe`，无需再改脚本里的硬编码路径 |
 
 输入示例：
 ```
-请输入序号或 IP 地址: 1          ← 选列表第 1 个设备
- 请输入序号或 IP 地址: 192.168.1.100  ← 直接连接此 IP
+请输入序号或 IP 地址: 1              ← 选列表第 1 个设备
+请输入序号或 IP 地址: 192.168.1.100  ← 直接连接此 IP
 ```
 
-> 依赖：`brew install scrcpy android-platform-tools`
+### 依赖
+
+- **Windows (.bat)**：`winget install Genymobile.scrcpy`，或到 [Genymobile/scrcpy Releases](https://github.com/Genymobile/scrcpy/releases) 下载 win64 压缩包解压。脚本会自动查找 `scrcpy.exe` / `adb.exe`（PATH / 脚本同目录 / `C:\scrcpy*` / scoop / chocolatey）；压缩包自带 adb.exe，保持解压目录完整即可
+- **macOS (.command)**：`brew install scrcpy android-platform-tools`
 
 ## 手机端自动化
 
@@ -74,3 +72,10 @@ MI6_HEADLESS_HEADSET/
 - 如果某天换了新屏幕，移除 Magisk 脚本不再禁用面板即可恢复
 - WiFi 和电脑须在同一局域网
 - scrcpy 参数可在脚本顶部按需调整（分辨率 / 码率 / 帧率）
+
+## 更新记录
+
+### v1.1.0（2026-08-16）
+
+- Windows `.bat` 升级为功能完整增强版，与 macOS 版对齐：USB 自动检测、WiFi IP 历史记忆、序号 / IP 灵活输入
+- Windows 版新增工具自动发现（PATH / 脚本同目录 / `C:\scrcpy*` / scoop / chocolatey），移除硬编码路径 `C:\scrcpy-win64-v3.3.4`
