@@ -4,7 +4,7 @@ setlocal enabledelayedexpansion
 title scrcpy One-Key Mirroring - Windows
 
 REM scrcpy one-key launcher for Windows v1.1.0
-REM Detect USB/WiFi devices and remember WiFi addresses.
+REM Detect USB/WiFi devices, probe saved addresses, and remember WiFi addresses.
 REM Locate adb.exe and scrcpy.exe automatically.
 
 REM Configurable parameters
@@ -16,6 +16,7 @@ set MAX_HISTORY=10
 REM Internal paths
 set "HISTORY_FILE=%~dp0.scrcpy_hosts"
 set "TMPF=%TEMP%\scrcpy_onekey.tmp"
+set "ONLINE_FILE=%TEMP%\scrcpy_onekey_online.tmp"
 
 REM Find required tools
 set "SCRCPY="
@@ -71,12 +72,31 @@ for /f "usebackq skip=1 tokens=1,2" %%a in ("%TMPF%") do (
     if "%%b"=="unauthorized" set "UNAUTH=%%a"
 )
 
-if exist "%HISTORY_FILE%" for /f "usebackq delims=" %%i in ("%HISTORY_FILE%") do (
-    if not defined SEEN_%%i (
-        set /a COUNT+=1
-        set "M_DEV_!COUNT!=%%i"
-        set "M_TYPE_!COUNT!=wifi-hist"
+REM Probe all saved ADB addresses in parallel (one-second overall timeout).
+if exist "%HISTORY_FILE%" (
+    type nul > "%ONLINE_FILE%"
+    where powershell.exe >nul 2>&1
+    if not errorlevel 1 powershell.exe -NoProfile -Command "$items=@(); Get-Content -LiteralPath $env:HISTORY_FILE | ForEach-Object { $ip=$_.Trim(); if($ip){ $c=New-Object Net.Sockets.TcpClient; $a=$c.BeginConnect($ip,5555,$null,$null); $items+=New-Object PSObject -Property @{Ip=$ip;Client=$c;Async=$a} } }; foreach($p in $items){ if($p.Async.AsyncWaitHandle.WaitOne(1000)){ try { $p.Client.EndConnect($p.Async); $p.Ip } catch {} }; $p.Client.Close() }" > "%ONLINE_FILE%" 2>nul
+
+    for /f "usebackq delims=" %%i in ("%ONLINE_FILE%") do set "ONLINE_%%i=1"
+
+    REM Add online saved devices first.
+    for /f "usebackq delims=" %%i in ("%HISTORY_FILE%") do (
+        if not defined SEEN_%%i if defined ONLINE_%%i (
+            set /a COUNT+=1
+            set "M_DEV_!COUNT!=%%i"
+            set "M_TYPE_!COUNT!=wifi-ready"
+        )
     )
+    REM Then append offline saved devices.
+    for /f "usebackq delims=" %%i in ("%HISTORY_FILE%") do (
+        if not defined SEEN_%%i if not defined ONLINE_%%i (
+            set /a COUNT+=1
+            set "M_DEV_!COUNT!=%%i"
+            set "M_TYPE_!COUNT!=wifi-hist"
+        )
+    )
+    del /q "%ONLINE_FILE%" >nul 2>&1
 )
 
 echo   [Step 1/2] Select a device
@@ -88,7 +108,8 @@ if !COUNT! equ 0 (
     for /l %%i in (1,1,!COUNT!) do (
         if "!M_TYPE_%%i!"=="usb"       echo     %%i. [USB ] !M_DEV_%%i!
         if "!M_TYPE_%%i!"=="wifi-on"   echo     %%i. [WiFi] !M_DEV_%%i! [connected]
-        if "!M_TYPE_%%i!"=="wifi-hist" echo     %%i. [WiFi] !M_DEV_%%i! [saved]
+        if "!M_TYPE_%%i!"=="wifi-ready" echo     %%i. [WiFi] !M_DEV_%%i! [online]
+        if "!M_TYPE_%%i!"=="wifi-hist"  echo     %%i. [WiFi] !M_DEV_%%i! [saved - offline]
     )
 )
 if defined UNAUTH echo   Note: authorize ADB debugging for !UNAUTH! on the phone.
