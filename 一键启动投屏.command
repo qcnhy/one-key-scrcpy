@@ -11,7 +11,7 @@
 #
 # 功能:
 #   • 自动检测已连接的 USB 设备
-#   • 记住历史连接过的 WiFi IP，下次直接选
+#   • 记住并探测历史 WiFi IP，在线设备优先显示
 #   • 输入数字 = 选序号; 输入 IP 地址 = 直接连
 #
 # ─── 可调参数 ───────────────────────────────────
@@ -74,6 +74,11 @@ save_history() {
         && mv "${HISTORY_FILE}.tmp" "$HISTORY_FILE"
 }
 
+# 只探测 ADB TCP 服务，不建立 ADB 连接
+is_history_online() {
+    nc -z -G 1 "$1" 5555 >/dev/null 2>&1
+}
+
 # 扫描设备，填充菜单数组
 scan() {
     m_dev=()
@@ -91,12 +96,36 @@ scan() {
             m_dev+=("$dev"); m_type+=("usb")
         fi
     done < <(adb devices 2>/dev/null | tail -n +2)
-    # ── 历史 IP (尚未连接的) ──
+    # ── 历史 IP (尚未连接的，并行探测、在线优先) ──
+    local history_ips=() offline_ips=() probe_pids=() ip i
     while IFS= read -r ip; do
         [ -z "$ip" ] && continue
         [[ "$seen_ips" == *" $ip "* ]] && continue
-        m_dev+=("$ip"); m_type+=("wifi-hist")
+        history_ips+=("$ip")
     done < <(load_history)
+
+    local probe_dir
+    probe_dir=$(mktemp -d "${TMPDIR:-/tmp}/scrcpy-probe.XXXXXX") || return 1
+    for ((i = 0; i < ${#history_ips[@]}; i++)); do
+        (is_history_online "${history_ips[$i]}" && : > "$probe_dir/$i") &
+        probe_pids+=("$!")
+    done
+    for i in "${probe_pids[@]}"; do
+        wait "$i" 2>/dev/null || true
+    done
+    for ((i = 0; i < ${#history_ips[@]}; i++)); do
+        ip="${history_ips[$i]}"
+        if [ -f "$probe_dir/$i" ]; then
+            m_dev+=("$ip"); m_type+=("wifi-ready")
+        else
+            offline_ips+=("$ip")
+        fi
+        rm -f "$probe_dir/$i"
+    done
+    rmdir "$probe_dir" 2>/dev/null || true
+    for ip in "${offline_ips[@]}"; do
+        m_dev+=("$ip"); m_type+=("wifi-hist")
+    done
 }
 
 # WiFi 连接; 成功时设置 WIFI_TARGET
@@ -163,8 +192,10 @@ main() {
                     printf "  ${BLD}%2d${RST}) ${GRN}[USB]${RST}  %s\n" "$n" "${m_dev[$i]}" ;;
                 wifi-on)
                     printf "  ${BLD}%2d${RST}) ${GRN}[WiFi]${RST} %s ${DIM}(已连接)${RST}\n" "$n" "${m_dev[$i]}" ;;
+                wifi-ready)
+                    printf "  ${BLD}%2d${RST}) ${GRN}[WiFi]${RST} %s ${GRN}(在线)${RST}\n" "$n" "${m_dev[$i]}" ;;
                 wifi-hist)
-                    printf "  ${BLD}%2d${RST}) ${CYN}[WiFi]${RST} %s ${DIM}(历史)${RST}\n" "$n" "${m_dev[$i]}" ;;
+                    printf "  ${BLD}%2d${RST}) ${CYN}[WiFi]${RST} %s ${DIM}(历史·离线)${RST}\n" "$n" "${m_dev[$i]}" ;;
             esac
         done
     fi
@@ -207,7 +238,7 @@ main() {
         wifi-on)
             echo -e "  ${GRN}✓ 设备已连接: ${target}${RST}"
             save_history "${target%%:*}" ;;
-        wifi-new|wifi-hist)
+        wifi-new|wifi-ready|wifi-hist)
             wifi_connect "$target" || {
                 echo ""
                 echo -e "  ${RED}设备连接失败${RST}"

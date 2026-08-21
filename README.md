@@ -39,6 +39,7 @@ MI6_HEADLESS_HEADSET/
 |------|------|
 | 自动检测 USB | 无需手填设备序列号 |
 | IP 记忆 | 连接成功的 WiFi IP 存入历史文件（macOS: `~/.scrcpy_hosts`，Windows: `%USERPROFILE%\.scrcpy_hosts`），下次直接选 |
+| 在线探测 | 并行检查历史 IP，在线设备标记并优先显示 |
 | 灵活输入 | 输入 **数字** 选序号，输入 **IP 地址** 直接连 |
 | 自动找工具 | Windows 版自动查找 `scrcpy.exe` / `adb.exe`，无需再改脚本里的硬编码路径 |
 
