@@ -255,11 +255,19 @@ main() {
     echo -e "  ${DIM}设备 ${target} · 分辨率 ${MAX_SIZE} · 码率 ${VIDEO_BIT_RATE} · 帧率 ${MAX_FPS}${RST}"
     echo -e "  ${DIM}(关闭窗口或按 Ctrl+C 可断开投屏)${RST}"
     echo ""
-    exec scrcpy -s "$target" \
+    local scrcpy_status
+    scrcpy -s "$target" \
         --max-size "$MAX_SIZE" \
         --video-bit-rate "$VIDEO_BIT_RATE" \
         --max-fps "$MAX_FPS" \
         --stay-awake
+    scrcpy_status=$?
+
+    if [ "$action" != "usb" ]; then
+        adb disconnect "$target" >/dev/null 2>&1 || true
+        echo -e "  ${DIM}已断开无线 ADB: ${target}${RST}"
+    fi
+    return "$scrcpy_status"
 }
 
 main "$@"

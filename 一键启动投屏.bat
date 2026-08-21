@@ -194,7 +194,12 @@ echo   Device !TARGET! - Size %MAX_SIZE% - Bitrate %VIDEO_BIT_RATE% - FPS %MAX_F
 echo   Close the window or press Ctrl+C to disconnect.
 echo.
 "%SCRCPY%" -s !TARGET! --max-size %MAX_SIZE% --video-bit-rate %VIDEO_BIT_RATE% --max-fps %MAX_FPS% --stay-awake
-if errorlevel 1 echo   [NOTICE] scrcpy exited with code !errorlevel!.
+set "SCRCPY_EXIT=!errorlevel!"
+if not "!ACTION!"=="usb" (
+    "%ADB%" disconnect !TARGET! >nul 2>&1
+    echo   Wireless ADB disconnected: !TARGET!
+)
+if not "!SCRCPY_EXIT!"=="0" echo   [NOTICE] scrcpy exited with code !SCRCPY_EXIT!.
 goto :end
 
 REM Subroutines
