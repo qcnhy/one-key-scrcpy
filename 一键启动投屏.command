@@ -259,8 +259,7 @@ main() {
         --max-size "$MAX_SIZE" \
         --video-bit-rate "$VIDEO_BIT_RATE" \
         --max-fps "$MAX_FPS" \
-        --stay-awake \
-        --turn-screen-off
+        --stay-awake
 }
 
 main "$@"

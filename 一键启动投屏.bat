@@ -172,7 +172,7 @@ echo   [Step 2/2] Launch scrcpy
 echo   Device !TARGET! - Size %MAX_SIZE% - Bitrate %VIDEO_BIT_RATE% - FPS %MAX_FPS%
 echo   Close the window or press Ctrl+C to disconnect.
 echo.
-"%SCRCPY%" -s !TARGET! --max-size %MAX_SIZE% --video-bit-rate %VIDEO_BIT_RATE% --max-fps %MAX_FPS% --stay-awake --turn-screen-off
+"%SCRCPY%" -s !TARGET! --max-size %MAX_SIZE% --video-bit-rate %VIDEO_BIT_RATE% --max-fps %MAX_FPS% --stay-awake
 if errorlevel 1 echo   [NOTICE] scrcpy exited with code !errorlevel!.
 goto :end
 
