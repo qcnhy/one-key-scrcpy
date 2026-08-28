@@ -136,30 +136,40 @@ wifi_connect() {
     # 用户即使输入了 :5555，也只向 adb 传递纯 IP。
     target="${target%:5555}"
 
-    echo -e "  ${CYN}连接中 ${target} …${RST}"
-    adb connect "$target" 2>&1 | sed 's/^/    /'
+    local device_serial="" attempt retry=0 connect_status=0
+    while [ "$retry" -le 1 ]; do
+        echo -e "  ${CYN}连接中 ${target} …${RST}"
+        adb connect "$target" 2>&1 | sed 's/^/    /'
+        connect_status=${PIPESTATUS[0]}
 
-    # 首次连接后 adbd 可能需要数秒才从 offline 变为 device。
-    local device_serial="" attempt
-    for ((attempt = 1; attempt <= 10; attempt++)); do
-        device_serial=$(adb devices 2>/dev/null | awk -v t="$target" \
-            '$2=="device" && ($1==t || $1==t ":5555") { print $1; exit }')
-        if [ -n "$device_serial" ]; then
-            break
+        # 首次连接后 adbd 可能需要数秒才从 offline 变为 device。
+        device_serial=""
+        if [ "$connect_status" -eq 0 ]; then
+            for ((attempt = 1; attempt <= 10; attempt++)); do
+                device_serial=$(adb devices 2>/dev/null | awk -v t="$target" \
+                    '$2=="device" && ($1==t || $1==t ":5555") { print $1; exit }')
+                [ -n "$device_serial" ] && break
+                sleep 0.5
+            done
         fi
-        sleep 0.5
+
+        if [ -n "$device_serial" ]; then
+            echo -e "  ${GRN}✓ WiFi 连接成功${RST}"
+            save_history "$target"
+            echo -e "  ${DIM}(已记住此 IP，下次可直接选择)${RST}"
+            WIFI_TARGET="$device_serial"
+            return 0
+        fi
+
+        [ "$retry" -eq 1 ] && break
+        echo -e "  ${YEL}ADB 状态异常，重启服务后自动重试…${RST}"
+        adb kill-server >/dev/null 2>&1 || true
+        adb start-server >/dev/null 2>&1
+        retry=1
     done
 
-    if [ -n "$device_serial" ]; then
-        echo -e "  ${GRN}✓ WiFi 连接成功${RST}"
-        save_history "$target"
-        echo -e "  ${DIM}(已记住此 IP，下次可直接选择)${RST}"
-        WIFI_TARGET="$device_serial"
-        return 0
-    else
-        echo -e "  ${RED}✗ 连接失败${RST}"
-        return 1
-    fi
+    echo -e "  ${RED}✗ 连接失败${RST}"
+    return 1
 }
 
 # ═════════════════════════════════════════════════

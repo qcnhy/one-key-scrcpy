@@ -227,10 +227,14 @@ exit /b 0
 set "WC=%~1"
 REM Port 5555 is the default for adb connect.
 if "!WC:~-5!"==":5555" set "WC=!WC:~0,-5!"
+set "WC_RETRIED=0"
+:wc_connect
 echo.
 echo   Connecting to !WC! ...
 "%ADB%" connect !WC! > "%TMPF%" 2>&1
+set "CONNECT_STATUS=!errorlevel!"
 for /f "usebackq delims=" %%o in ("%TMPF%") do echo     %%o
+if not "!CONNECT_STATUS!"=="0" goto :wc_fail
 REM Wait for adbd to transition from offline to device.
 set "WIFI_TARGET="
 set /a TRIES=0
@@ -253,7 +257,12 @@ call :save_history "!WC!"
 echo   IP saved for next time.
 exit /b 0
 :wc_fail
-exit /b 1
+if "!WC_RETRIED!"=="1" exit /b 1
+set "WC_RETRIED=1"
+echo   ADB state is abnormal. Restarting ADB and retrying...
+"%ADB%" kill-server >nul 2>&1
+"%ADB%" start-server >nul 2>&1
+goto :wc_connect
 
 :save_history
 REM Save newest IP first, deduplicate, and limit history size.
